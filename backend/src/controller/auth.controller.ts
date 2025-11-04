@@ -132,10 +132,76 @@ export async function handleLogout(req: Request, res: Response) {
     res.status(400).json({ error: err.message });
   } 
 }
-export async function checkAuth(req:Request, res: Response) {
+export async function checkAuth(req: Request, res: Response) {
   try {
-    res.status(200).json(req.auth);
+    const user = await User.findById(req.auth.id);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    
+    return res.status(200).json(user.toJson());
   } catch (err: any) {
+    console.error("[AUTH] checkAuth error:", err);
     res.status(400).json({ error: err.message });
-  } 
+  }
+}
+
+
+export async function updateProfile(req: Request, res: Response): Promise<void> {
+  try {
+    const { displayName, bio, avatar, oldPassword, password } = req.body as {
+      displayName?: string;
+      bio?: string;
+      avatar?: string;
+      oldPassword?: string;
+      password?: string;
+    };
+
+    const userId = req.auth.id;
+
+    if (!displayName && !bio && !avatar && !password) {
+      res.status(400).json({ message: "No data provided" });
+      return;
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      res.status(404).json({ message: "User not found" });
+      return;
+    }
+
+    // --- Password update section ---
+    if (password) {
+      if (!oldPassword) {
+        res.status(400).json({ message: "Old password required" });
+        return;
+      }
+
+      const isMatch = await bcrypt.compare(oldPassword, user.passwordHash);
+      if (!isMatch) {
+        res.status(400).json({ message: "Old password is incorrect" });
+        return;
+      }
+
+      user.passwordHash = await bcrypt.hash(password, 10);
+    }
+
+    // --- Profile fields update section ---
+    if (typeof displayName === "string") user.displayName = displayName.trim();
+    if (typeof bio === "string") user.bio = bio.trim(); // ✅ properly handled
+    if (typeof avatar === "string") user.avatar = avatar;
+
+    await user.save(); // ✅ ensure save
+
+    res.status(200).json({
+      message: "Profile updated successfully",
+      user: user.toJson(), // return updated user
+    });
+  } catch (err) {
+    console.error("[AUTH] updateProfile error:", err);
+    const message = err instanceof Error ? err.message : "Server error";
+    res.status(500).json({ message });
+  }
 }

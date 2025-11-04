@@ -3,12 +3,13 @@ import type { ChangeEvent } from "react";
 import { useAuthStore } from "../stores/useAuthStore";
 import { Camera, Mail, User, Lock, Info, Edit2 } from "lucide-react";
 import avatar from "../public/avatar.png";
+import { toast } from "react-hot-toast";
 
 const ProfilePage: React.FC = () => {
-  const { authUser } = useAuthStore();
+  const { authUser, updateProfile } = useAuthStore();
   const [selectedImg, setSelectedImg] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState(authUser?.displayName || "");
-  const [bio, setBio] = useState("Hey there! I’m using PingChat.");
+  const [bio, setBio] = useState(authUser?.bio || "Hey there! I’m using PingChat.");
   const [editingName, setEditingName] = useState(false);
   const [editingBio, setEditingBio] = useState(false);
   const [showPasswordSection, setShowPasswordSection] = useState(false);
@@ -16,19 +17,25 @@ const ProfilePage: React.FC = () => {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isChanged, setIsChanged] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
+  // Track form changes
   useEffect(() => {
     if (
       displayName !== authUser?.displayName ||
+      bio !== authUser?.bio ||
       selectedImg !== null ||
-      bio !== "Hey there! I’m using PingChat."
+      oldPassword ||
+      newPassword ||
+      confirmPassword
     ) {
       setIsChanged(true);
     } else {
       setIsChanged(false);
     }
-  }, [displayName, bio, selectedImg, authUser]);
+  }, [displayName, bio, selectedImg, oldPassword, newPassword, confirmPassword, authUser]);
 
+  // Image upload handler
   const handleImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -37,12 +44,50 @@ const ProfilePage: React.FC = () => {
     reader.onload = () => setSelectedImg(reader.result as string);
   };
 
-  const handleSaveChanges = () => {
-    setSelectedImg(null);
-    setEditingName(false);
-    setEditingBio(false);
-    setShowPasswordSection(false);
-    alert("Changes saved locally! (API update not implemented yet)");
+  // Save profile and password updates
+  const handleSaveChanges = async () => {
+    if (newPassword || confirmPassword || oldPassword) {
+      if (!oldPassword || !newPassword || !confirmPassword) {
+        toast.error("Please fill in all password fields");
+        return;
+      }
+      if (newPassword !== confirmPassword) {
+        toast.error("New passwords do not match");
+        return;
+      }
+    }
+
+    setIsLoading(true);
+
+    try {
+      await updateProfile({
+        displayName,
+        bio,
+        avatar: selectedImg || authUser?.avatar,
+        oldPassword,
+        password: newPassword,
+      });
+
+      // ✅ Sync updated user data from backend
+      await useAuthStore.getState().checkAuth();
+
+      toast.success("Profile updated successfully!");
+
+      // Reset local states
+      setSelectedImg(null);
+      setOldPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setShowPasswordSection(false);
+      setEditingName(false);
+      setEditingBio(false);
+      setIsChanged(false);
+    } catch (error) {
+      console.error("[PROFILE] Update error:", error);
+      toast.error("Failed to update profile");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   if (!authUser)
@@ -99,7 +144,7 @@ const ProfilePage: React.FC = () => {
               ) : (
                 <>
                   <span className="text-xl font-semibold text-base-content">
-                    {authUser.displayName || "No Name"}
+                    {authUser.displayName || "-"}
                   </span>
                   <Edit2
                     className="w-4 h-4 text-base-content/70 cursor-pointer hover:text-base-content transition"
@@ -130,7 +175,7 @@ const ProfilePage: React.FC = () => {
                 Email Address
               </div>
               <div className="w-full h-[45px] px-4 flex items-center bg-base-100 rounded-lg border border-base-300 text-sm text-base-content">
-                user@email.com
+                {authUser.email || "-"}
               </div>
             </div>
 
@@ -202,10 +247,12 @@ const ProfilePage: React.FC = () => {
                   className="w-full h-[45px] px-4 bg-base-100 rounded-lg border border-base-300 outline-none text-base-content"
                 />
                 <button
-                  className="btn btn-primary w-full mt-2"
+                  className={`btn btn-primary w-full mt-2 ${
+                    isLoading ? "loading" : ""
+                  }`}
                   onClick={handleSaveChanges}
                 >
-                  Update Password
+                  {isLoading ? "Updating..." : "Update Password"}
                 </button>
               </div>
             </div>
@@ -213,8 +260,12 @@ const ProfilePage: React.FC = () => {
             {/* Save Changes Button */}
             {isChanged && (
               <div className="flex justify-center pt-4">
-                <button className="btn btn-primary" onClick={handleSaveChanges}>
-                  Save Changes
+                <button
+                  className={`btn btn-primary ${isLoading ? "loading" : ""}`}
+                  onClick={handleSaveChanges}
+                  disabled={isLoading}
+                >
+                  {isLoading ? "Saving..." : "Save Changes"}
                 </button>
               </div>
             )}

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import axiosInstance from "../lib/axios.config";
 import { toast } from "react-hot-toast";
+import axios from "axios"; // ✅ Needed for axios error type checking
 import type { TRegisterForm, TLoginForm } from "../lib/auth.validation";
 
 type TAuth = {
@@ -8,6 +9,8 @@ type TAuth = {
   displayName: string;
   id: string;
   avatar: string;
+  email: string;
+  bio: string;
 };
 
 type TAuthStore = {
@@ -22,7 +25,16 @@ type TAuthStore = {
   login: (data: TLoginForm) => Promise<void>;
   connectSocket: () => void;
   disConnectSocket: () => void;
-verifyOtp: (email: string, otp: string) => Promise<boolean>;
+  verifyOtp: (email: string, otp: string) => Promise<boolean>;
+
+  // ✅ New: Update Profile
+  updateProfile: (data: {
+    displayName?: string;
+    bio?: string;
+    avatar?: string;
+    oldPassword?: string;
+    password?: string;
+  }) => Promise<void>;
 };
 
 export const useAuthStore = create<TAuthStore>()((set, get) => ({
@@ -32,6 +44,7 @@ export const useAuthStore = create<TAuthStore>()((set, get) => ({
   isCheckingAuth: true,
   socket: null,
 
+  // ✅ Check Authentication
   checkAuth: async () => {
     console.log("[AUTH] Checking auth...");
     set({ isCheckingAuth: true });
@@ -46,13 +59,13 @@ export const useAuthStore = create<TAuthStore>()((set, get) => ({
     }
   },
 
+  // ✅ Signup
   signUp: async (data) => {
     set({ isSigningUp: true });
     try {
       await axiosInstance.post("/auth/register", data);
-      return true;
       toast.success("Account created");
-    //   get().connectSocket();
+      return true;
     } catch (err) {
       console.log("[AUTH] SignUp error:", err);
       toast.error("Sign up failed");
@@ -62,14 +75,11 @@ export const useAuthStore = create<TAuthStore>()((set, get) => ({
     }
   },
 
+  // ✅ Verify OTP
   verifyOtp: async (email: string, otp: string) => {
     try {
-      const response = await axiosInstance.post("/auth/verify-otp", {
-        email,
-        otp
-      });
+      const response = await axiosInstance.post("/auth/verifyOtp", { email, otp });
       await get().checkAuth();
-      
       toast.success(response.data.message || "Email verified successfully!");
       return true;
     } catch (err) {
@@ -79,6 +89,7 @@ export const useAuthStore = create<TAuthStore>()((set, get) => ({
     }
   },
 
+  // ✅ Login
   login: async (data) => {
     console.log("[AUTH] Login attempt:", data);
     set({ isLoggingIn: true });
@@ -86,7 +97,6 @@ export const useAuthStore = create<TAuthStore>()((set, get) => ({
       await axiosInstance.post("/auth/login", data);
       await get().checkAuth();
       toast.success("Logged in");
-    //   get().connectSocket();
     } catch (err) {
       console.log("[AUTH] Login error:", err);
       toast.error("Login failed");
@@ -95,11 +105,11 @@ export const useAuthStore = create<TAuthStore>()((set, get) => ({
     }
   },
 
+  // ✅ Logout
   logout: async () => {
     console.log("[AUTH] Logout attempt...");
     try {
       await axiosInstance.post("/auth/logout");
-      console.log("[AUTH] Logout success");
       set({ authUser: null });
       get().disConnectSocket();
       toast.success("Logged out");
@@ -109,6 +119,34 @@ export const useAuthStore = create<TAuthStore>()((set, get) => ({
     }
   },
 
+  // ✅ Update Profile (clean, type-safe, no ESLint warnings)
+  updateProfile: async (data) => {
+    try {
+      const res = await axiosInstance.put("/auth/updateProfile", data);
+
+      set((state) => ({
+        authUser: {
+          ...state.authUser!,
+          ...res.data.user,
+        },
+      }));
+
+      toast.success("Profile updated successfully!");
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        console.error("[AUTH] Update profile error:", err);
+        toast.error(err.response?.data?.message || "Profile update failed");
+      } else if (err instanceof Error) {
+        console.error("[AUTH] Update profile error:", err.message);
+        toast.error(err.message);
+      } else {
+        console.error("[AUTH] Unknown update profile error:", err);
+        toast.error("Unexpected error occurred");
+      }
+    }
+  },
+
+  // ✅ Socket Placeholder
   connectSocket: () => {
     console.log("[SOCKET] connectSocket called (no implementation yet)");
   },
