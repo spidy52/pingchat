@@ -18,7 +18,6 @@ type TAuthStore = {
   isSigningUp: boolean;
   isLoggingIn: boolean;
   isCheckingAuth: boolean;
-  socket: null;
   checkAuth: () => Promise<void>;
   signUp: (data: TRegisterForm) => Promise<boolean>;
   logout: () => Promise<void>;
@@ -42,7 +41,6 @@ export const useAuthStore = create<TAuthStore>()((set, get) => ({
   isSigningUp: false,
   isLoggingIn: false,
   isCheckingAuth: true,
-  socket: null,
 
   // ✅ Check Authentication
   checkAuth: async () => {
@@ -50,9 +48,10 @@ export const useAuthStore = create<TAuthStore>()((set, get) => ({
     set({ isCheckingAuth: true });
     try {
       const res = await axiosInstance.get("/auth/check");
+      console.log("[AUTH] Auth check response:", res.data);
       set({ authUser: res.data });
-    } catch (err) {
-      console.log("[AUTH] checkAuth failed:", err);
+    } catch (err: any) {
+      console.log("[AUTH] checkAuth failed:", err.response?.data || err.message);
       set({ authUser: null });
     } finally {
       set({ isCheckingAuth: false });
@@ -63,12 +62,13 @@ export const useAuthStore = create<TAuthStore>()((set, get) => ({
   signUp: async (data) => {
     set({ isSigningUp: true });
     try {
-      await axiosInstance.post("/auth/register", data);
-      toast.success("Account created");
+      const response = await axiosInstance.post("/auth/register", data);
+      console.log("[AUTH] SignUp response:", response.data);
+      toast.success(response.data.message || "OTP sent to your email");
       return true;
-    } catch (err) {
-      console.log("[AUTH] SignUp error:", err);
-      toast.error("Sign up failed");
+    } catch (err: any) {
+      console.log("[AUTH] SignUp error:", err.response?.data || err.message);
+      toast.error(err.response?.data?.message || "Sign up failed");
       return false;
     } finally {
       set({ isSigningUp: false });
@@ -78,13 +78,19 @@ export const useAuthStore = create<TAuthStore>()((set, get) => ({
   // ✅ Verify OTP
   verifyOtp: async (email: string, otp: string) => {
     try {
-      const response = await axiosInstance.post("/auth/verifyOtp", { email, otp });
+      const response = await axiosInstance.post("/auth/verifyOtp", {
+        email,
+        otp
+      });
+      console.log("[AUTH] Verify OTP response:", response.data);
+      
+      // Check auth after successful verification
       await get().checkAuth();
       toast.success(response.data.message || "Email verified successfully!");
       return true;
-    } catch (err) {
-      console.error("[AUTH] Verify OTP error:", err);
-      toast.error("OTP verification failed");
+    } catch (err: any) {
+      console.error("[AUTH] Verify OTP error:", err.response?.data || err.message);
+      toast.error(err.response?.data?.message || "OTP verification failed");
       return false;
     }
   },
@@ -94,12 +100,16 @@ export const useAuthStore = create<TAuthStore>()((set, get) => ({
     console.log("[AUTH] Login attempt:", data);
     set({ isLoggingIn: true });
     try {
-      await axiosInstance.post("/auth/login", data);
+      const response = await axiosInstance.post("/auth/login", data);
+      console.log("[AUTH] Login response:", response.data);
+      
+      // Check auth to get user data
       await get().checkAuth();
-      toast.success("Logged in");
-    } catch (err) {
-      console.log("[AUTH] Login error:", err);
-      toast.error("Login failed");
+      
+      toast.success(response.data.message || "Logged in successfully");
+    } catch (err: any) {
+      console.log("[AUTH] Login error:", err.response?.data || err.message);
+      toast.error(err.response?.data?.message || "Login failed");
     } finally {
       set({ isLoggingIn: false });
     }
@@ -111,10 +121,9 @@ export const useAuthStore = create<TAuthStore>()((set, get) => ({
     try {
       await axiosInstance.post("/auth/logout");
       set({ authUser: null });
-      get().disConnectSocket();
-      toast.success("Logged out");
-    } catch (err) {
-      console.log("[AUTH] Logout error:", err);
+      toast.success("Logged out successfully");
+    } catch (err: any) {
+      console.log("[AUTH] Logout error:", err.response?.data || err.message);
       toast.error("Logout failed");
     }
   },

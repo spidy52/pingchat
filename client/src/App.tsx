@@ -1,42 +1,38 @@
 import { useEffect } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
-import { Home, Loader } from "lucide-react";
+import { Loader } from "lucide-react";
 import { Toaster } from "react-hot-toast";
 import { useAuthStore } from "./stores/useAuthStore";
+import { useChatStore } from "./stores/useChatStore";
 import Register from "./pages/Register";
-import VerifyOtp  from "./pages/VerifyOtp";
 import Login from "./pages/Login";
-// import Chat from "./pages/Chat";
+import HomePage from "./pages/Home";
 import { ProtectedRoute } from "./components/ProtectedRoute";
-import Navbar   from "./pages/Navbar";
+import Navbar from "./pages/Navbar";
 import ProfilePage from "./pages/UserProfile";
-
-
-// // Protected Route Component
-// const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-//   const { authUser, isCheckingAuth } = useAuthStore();
-
-//   if (isCheckingAuth) {
-//     return (
-//       <div className="flex items-center justify-center h-screen">
-//         <Loader className="size-10 animate-spin" />
-//       </div>
-//     );
-//   }
-
-//   if (!authUser) {
-//     return <Navigate to="/login" replace />;
-//   }
-
-//   return <>{children}</>;
-// };
+import VerifyOtp from "./pages/VerifyOtp";
 
 function App() {
   const { checkAuth, isCheckingAuth, authUser } = useAuthStore();
+  const { connectSocket, disconnectSocket } = useChatStore();
 
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
+
+  // Connect/disconnect socket based on auth state
+  useEffect(() => {
+    if (authUser) {
+      connectSocket(authUser.id);
+    } else {
+      disconnectSocket();
+    }
+
+    // Cleanup on unmount
+    return () => {
+      disconnectSocket();
+    };
+  }, [authUser, connectSocket, disconnectSocket]);
 
   // Show loading state while checking initial auth
   if (isCheckingAuth && !authUser) {
@@ -72,8 +68,7 @@ function App() {
           path="/"
           element={
             <ProtectedRoute>
-              {/* <Chat /> */}
-              <Home />
+              <HomePage />
             </ProtectedRoute>
           }
         />
